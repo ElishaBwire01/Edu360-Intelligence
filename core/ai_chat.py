@@ -2232,6 +2232,25 @@ You are the ultimate assistant for this school's discipline management - use you
                 "context": {"source": "django_orm"},
             }
 
+        # Deterministic database answers must win over provider-backed facts.
+        # This keeps counts, rankings, and other factual responses tied to the
+        # live ORM instead of allowing a model response to replace them.
+        try:
+            from .admin_agent_queries import LocalQueryRouter
+            local_answer = LocalQueryRouter().answer(user_message)
+            if local_answer:
+                return {
+                    "success": True,
+                    "response": local_answer,
+                    "mode": "local_db",
+                    "provider": "local",
+                    "context": {"source": "django_orm"},
+                }
+        except Exception as exc:
+            self.logger.exception(
+                "Local database query failed; continuing with unified facts: %s",
+                exc)
+
         # 0b) Unified-facts pass. Attach the canonical snapshot for the
         #     recognised domain, plus a backend probe for privileged roles.
         facts_slice = None
@@ -2292,7 +2311,7 @@ You are the ultimate assistant for this school's discipline management - use you
                 "context": gather_context,
             }
 
-        # 1) Local deterministic router
+        # 1) Local deterministic router fallback
         try:
             from .admin_agent_queries import LocalQueryRouter
             local_answer = LocalQueryRouter().answer(user_message)

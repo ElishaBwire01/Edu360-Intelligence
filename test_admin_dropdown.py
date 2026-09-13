@@ -10,46 +10,34 @@ from core.models import GradeLevel
 
 User = get_user_model()
 
-# Login
-client = Client()
-user = User.objects.get(username='Elisha')
-client.force_login(user)
+def main():
+    client = Client()
+    user = User.objects.filter(is_superuser=True).first()
+    if user is None:
+        print("No superuser exists; create one before running this diagnostic.")
+        return
+    client.force_login(user)
 
-# Get admin dashboard
-response = client.get('/admin-dashboard/')
-content = response.content.decode('utf-8')
+    response = client.get('/admin-dashboard/')
+    content = response.content.decode('utf-8')
 
-print("✅ Checking admin dashboard for grade options...")
-print("-" * 50)
+    print("Checking admin dashboard for grade options...")
+    print("-" * 50)
 
-# Check for each grade
-grades = GradeLevel.objects.filter(is_active=True).order_by('order')
-found = []
-missing = []
+    grades = GradeLevel.objects.filter(is_active=True).order_by('order')
+    found = [grade.name for grade in grades if grade.name in content]
+    missing = [grade.name for grade in grades if grade.name not in content]
 
-for grade in grades:
-    if grade.name in content:
-        found.append(grade.name)
+    if found:
+        print(f"Found in HTML: {', '.join(found)}")
+    if missing:
+        print(f"Missing from HTML: {', '.join(missing)}")
+
+    if 'name="grade_level"' in content:
+        print("grade_level dropdown found")
     else:
-        missing.append(grade.name)
+        print("grade_level dropdown not found")
 
-if found:
-    print(f"✅ Found in HTML: {', '.join(found)}")
-if missing:
-    print(f"❌ Missing from HTML: {', '.join(missing)}")
 
-# Check specifically for the dropdown
-if 'name="grade_level"' in content:
-    print("✅ grade_level dropdown found")
-    
-    # Extract the dropdown section
-    import re
-    match = re.search(r'<select name="grade_level".*?</select>', content, re.DOTALL)
-    if match:
-        dropdown = match.group(0)
-        options = re.findall(r'>([^<]+)</option>', dropdown)
-        print(f"📊 Options in dropdown: {len(options) - 1}")  # -1 for the "-- Select Grade --" option
-        for opt in options[1:]:  # Skip the first option
-            print(f"  - {opt}")
-else:
-    print("❌ grade_level dropdown not found")
+if __name__ == "__main__":
+    main()
